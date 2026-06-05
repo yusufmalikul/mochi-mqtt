@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: 2024 mochi-mqtt
+// SPDX-FileCopyrightText: 2026 yusufmalikul
 // SPDX-FileContributor: yusufmalikul
 
 // Package timestamp provides a hook which appends a receive timestamp to the
