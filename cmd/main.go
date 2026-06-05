@@ -14,6 +14,7 @@ import (
 
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
+	"github.com/mochi-mqtt/server/v2/hooks/timestamp"
 	"github.com/mochi-mqtt/server/v2/listeners"
 )
 
@@ -47,6 +48,7 @@ func main() {
 
 	server := mqtt.New(nil)
 	_ = server.AddHook(new(auth.AllowHook), nil)
+	_ = server.AddHook(new(timestamp.Hook), nil)
 
 	tcp := listeners.NewTCP(listeners.Config{
 		ID:        "t1",

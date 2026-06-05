@@ -16,6 +16,7 @@ import (
 	"github.com/mochi-mqtt/server/v2/hooks/storage/bolt"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/pebble"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/redis"
+	"github.com/mochi-mqtt/server/v2/hooks/timestamp"
 	"github.com/mochi-mqtt/server/v2/listeners"
 
 	mqtt "github.com/mochi-mqtt/server/v2"
@@ -73,6 +74,9 @@ options:
 		Hooks: []mqtt.HookLoadConfig{
 			{
 				Hook: new(auth.AllowHook),
+			},
+			{
+				Hook: new(timestamp.Hook),
 			},
 		},
 		ClientNetWriteBufferSize: 2048,

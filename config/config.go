@@ -11,6 +11,7 @@ import (
 
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
 	"github.com/mochi-mqtt/server/v2/hooks/debug"
+	"github.com/mochi-mqtt/server/v2/hooks/timestamp"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/badger"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/bolt"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/pebble"
@@ -85,6 +86,12 @@ func (hc HookConfigs) ToHooks() []mqtt.HookLoadConfig {
 			Config: hc.Debug,
 		})
 	}
+
+	// The timestamp hook is always enabled: it appends a receive timestamp to
+	// the payload of messages published to topics ending in "s".
+	hlc = append(hlc, mqtt.HookLoadConfig{
+		Hook: new(timestamp.Hook),
+	})
 
 	return hlc
 }
