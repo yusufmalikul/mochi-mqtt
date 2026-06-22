@@ -44,6 +44,13 @@ func (h *Hook) SetOpts(l *slog.Logger, opts *mqtt.HookOptions) {
 // final segment is "s" (e.g. "test/s"), the payload is rewritten to
 // "<payload>:<unix-millis>".
 func (h *Hook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
+	// Skip bus-injected (inline) messages: they were already stamped at ingress
+	// on their origin node. Re-stamping here would append a second timestamp
+	// (e.g. "hello:<ts>:<ts>") for remote-node subscribers. cl is nil in tests.
+	if cl != nil && cl.Net.Inline {
+		return pk, nil
+	}
+
 	if pk.TopicName != "s" && !strings.HasSuffix(pk.TopicName, "/s") {
 		return pk, nil
 	}
