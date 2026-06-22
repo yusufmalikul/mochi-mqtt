@@ -3,9 +3,9 @@
 // SPDX-FileContributor: yusufmalikul
 
 // Package timestamp provides a hook which appends a receive timestamp to the
-// payload of published messages whose topic ends in "s". This mirrors the
-// behaviour previously implemented in a custom EMQX fork (emqx_message.erl,
-// make/4) being migrated to mochi-mqtt.
+// payload of published messages whose final topic segment is "s" (e.g.
+// "test/s"). This mirrors the behaviour previously implemented in a custom
+// EMQX fork (emqx_message.erl, make/4) being migrated to mochi-mqtt.
 package timestamp
 
 import (
@@ -40,10 +40,11 @@ func (h *Hook) SetOpts(l *slog.Logger, opts *mqtt.HookOptions) {
 	h.Log = l
 }
 
-// OnPublish is called when a client publishes a message. When the topic ends
-// with "s", the payload is rewritten to "<payload>:<unix-millis>".
+// OnPublish is called when a client publishes a message. When the topic's
+// final segment is "s" (e.g. "test/s"), the payload is rewritten to
+// "<payload>:<unix-millis>".
 func (h *Hook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
-	if !strings.HasSuffix(pk.TopicName, "s") {
+	if pk.TopicName != "s" && !strings.HasSuffix(pk.TopicName, "/s") {
 		return pk, nil
 	}
 

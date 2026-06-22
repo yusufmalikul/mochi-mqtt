@@ -20,21 +20,25 @@ func TestProvides(t *testing.T) {
 	require.False(t, h.Provides(mqtt.OnConnect))
 }
 
-func TestStampsTopicEndingInS(t *testing.T) {
-	h := new(Hook)
-	pk, err := h.OnPublish(nil, packets.Packet{TopicName: "sensors", Payload: []byte("data")})
-	require.NoError(t, err)
+func TestStampsTopicWithFinalSegmentS(t *testing.T) {
+	for _, topic := range []string{"test/s", "a/b/s", "s"} {
+		h := new(Hook)
+		pk, err := h.OnPublish(nil, packets.Packet{TopicName: topic, Payload: []byte("data")})
+		require.NoError(t, err)
 
-	parts := strings.SplitN(string(pk.Payload), ":", 2)
-	require.Len(t, parts, 2)
-	require.Equal(t, "data", parts[0])
-	_, perr := strconv.ParseInt(parts[1], 10, 64)
-	require.NoError(t, perr, "suffix should be a numeric timestamp")
+		parts := strings.SplitN(string(pk.Payload), ":", 2)
+		require.Len(t, parts, 2, "topic %q should be stamped", topic)
+		require.Equal(t, "data", parts[0])
+		_, perr := strconv.ParseInt(parts[1], 10, 64)
+		require.NoError(t, perr, "suffix should be a numeric timestamp")
+	}
 }
 
 func TestLeavesOtherTopicsUnchanged(t *testing.T) {
-	h := new(Hook)
-	pk, err := h.OnPublish(nil, packets.Packet{TopicName: "sensor/temp", Payload: []byte("data")})
-	require.NoError(t, err)
-	require.Equal(t, []byte("data"), pk.Payload)
+	for _, topic := range []string{"sensors", "status", "bus", "sensor/temp"} {
+		h := new(Hook)
+		pk, err := h.OnPublish(nil, packets.Packet{TopicName: topic, Payload: []byte("data")})
+		require.NoError(t, err)
+		require.Equal(t, []byte("data"), pk.Payload, "topic %q should be unchanged", topic)
+	}
 }
