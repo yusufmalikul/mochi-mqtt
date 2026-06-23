@@ -267,6 +267,11 @@ Consider per-topic-class policy + a local retry buffer for the fail-open path.
       before `server.Publish` (Redis `SET NX EX` with `seen:<msgID>:<brokerID>` only if cross-restart
       persistence proves necessary). Origin tag handles happy-path dups; gate handles QoS-1 / crash
       / consumer-group redelivery races.
+      **Reproduced & consciously deferred (2026-06-22):** injecting the same `msgID` onto the bus
+      twice (`XADD ... msgID fixedmsgid12345 ...` ×2) makes a remote subscriber receive the payload
+      2×. Confirms Rule 1 (origin tag) does NOT catch same-message-twice, only the gate does. Safe to
+      defer while traffic is QoS 0 telemetry (a rare dup is harmless); **implement before enabling
+      QoS 1 or scale-down testing**, where redelivery makes dups routine rather than rare.
 - [ ] **Session rehydration** (the big one): on `OnSessionEstablish`, fetch subscriptions +
       offline queue from Redis and rehydrate into the local node. Stock storage hook restores
       only at boot, and multiple nodes sharing it clobber each other's keys — needs a

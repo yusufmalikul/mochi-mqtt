@@ -58,7 +58,7 @@ Unless it's a critical issue, new releases typically go out over the weekend.
 
 ## Roadmap
 - Please [open an issue](https://github.com/mochi-mqtt/server/issues) to request new features or event hooks!
-- Cluster support.
+- Cluster support (basic Redis Streams bus available — see [Clustering](#clustering-redis-streams-bus)).
 - Enhanced Metrics support.
 
 ## Quick Start
@@ -232,6 +232,8 @@ Hooks are stackable - you can add multiple hooks to a server, and they will be r
 | Persistence    | [mochi-mqtt/server/hooks/storage/pebble](hooks/storage/pebble/pebble.go) | Persistent storage using [PebbleDB](https://github.com/cockroachdb/pebble).  | 
 | Persistence    | [mochi-mqtt/server/hooks/storage/redis](hooks/storage/redis/redis.go)    | Persistent storage using [Redis](https://redis.io).                        | 
 | Debugging      | [mochi-mqtt/server/hooks/debug](hooks/debug/debug.go)                    | Additional debugging output to visualise packet flow.                      | 
+| Clustering     | [mochi-mqtt/server/hooks/bus](hooks/bus/bus.go)                          | Routes messages between multiple broker instances over a Redis Stream bus. | 
+| Custom         | [mochi-mqtt/server/hooks/timestamp](hooks/timestamp/timestamp.go)        | Appends a receive timestamp to payloads on topics ending in `/s`.          | 
 
 Many of the internal server functions are now exposed to developers, so you can make your own Hooks by using the above as examples. If you do, please [Open an issue](https://github.com/mochi-mqtt/server/issues) and let everyone know!
 
@@ -350,6 +352,51 @@ if err != nil {
 For more information on how the badger hook works, or how to use it, see the [examples/persistence/badger/main.go](examples/persistence/badger/main.go) or [hooks/storage/badger](hooks/storage/badger) code.
 
 There is also a BoltDB hook which has been deprecated in favour of Badger, but if you need it, check [examples/persistence/bolt/main.go](examples/persistence/bolt/main.go).
+
+## Clustering (Redis Streams Bus)
+Each broker instance keeps its subscription table in local RAM, so a subscriber on one instance is invisible to the others. To run multiple instances behind a load balancer and have a message published on one instance reach subscribers on another, use the **bus hook** ([hooks/bus](hooks/bus/bus.go)), which routes messages between instances using a shared [Redis Stream](https://redis.io/docs/data-types/streams/) as the message bus.
+
+How it works:
+- **Inbound:** `OnPublish` tags each client-published message with the originating broker ID and a unique `msgID`, then `XADD`s it (with topic, payload, qos, retain) to a shared Redis Stream.
+- **Outbound:** each instance runs a consumer goroutine reading the stream via a **per-node consumer group** (group name = broker ID, so every node sees every message). Messages that originated on another instance are re-injected locally via `server.Publish`; an instance skips messages it originated itself (it already delivered them to its local subscribers at ingress). This origin tag prevents double delivery.
+
+```go
+import "github.com/mochi-mqtt/server/v2/hooks/bus"
+
+// InlineClient is REQUIRED — the bus uses server.Publish to inject remote messages.
+server := mqtt.New(&mqtt.Options{InlineClient: true})
+_ = server.AddHook(new(auth.AllowHook), nil)
+
+err := server.AddHook(new(bus.Hook), &bus.Options{
+  RedisOptions: &redis.Options{Addr: "localhost:6379"},
+  Server:       server,
+  BrokerID:     "A", // unique + stable per instance; used as origin tag and consumer group name
+})
+```
+
+The provided [cmd/main.go](cmd/main.go) wires this behind two flags. The bus is **off by default** (single-instance behaviour is unchanged); it is enabled only when `-broker-id` is set:
+
+```sh
+# instance A
+./mqtt -broker-id A -redis localhost:6379 -tcp :1883
+# instance B (different host/container, same Redis)
+./mqtt -broker-id B -redis localhost:6379 -tcp :1883
+```
+
+| Flag         | Default          | Usage                                                                |
+|--------------|------------------|----------------------------------------------------------------------|
+| `-broker-id` | `""` (bus off)   | Unique, stable broker ID. Enables the bus when set.                  |
+| `-redis`     | `localhost:6379` | Address of the shared Redis instance used as the bus.               |
+
+### Production setup
+1. **Redis:** stand up one Redis reachable by all instances (self-hosted or managed, e.g. ElastiCache / Memorystore). The bus is an *in-flight conveyor, not an archive* — Redis persistence is not required for the stream, and the stream is approximately capped via `XADD MAXLEN ~` (`Options.MaxLen`, default 10000). Nothing needs to be pre-created; the hook creates the stream and consumer groups on connect.
+2. **Instances:** run the same binary N times, each with a unique `-broker-id` (in Kubernetes, use the pod name; in an ASG, the instance ID) and a stable, unique client `BrokerID`.
+3. **Load balancer:** a **TCP / Layer-4** passthrough LB (e.g. AWS NLB) in front of `:1883` — not an HTTP/L7 LB.
+
+> **Not yet production-complete.** The bus provides cross-node routing and origin-tag de-duplication only. Before an autoscaling deployment you still need: real authentication (the example uses allow-all), per-node redelivery de-duplication (QoS-1 / crash redelivery), cross-node session rehydration on scale-down, graceful SIGTERM draining, and dead-node consumer-group cleanup. A fixed small cluster (2–3 non-autoscaling instances) with real auth is a safe first step.
+
+## Timestamp Hook
+A small custom hook ([hooks/timestamp](hooks/timestamp/timestamp.go)) appends a millisecond receive timestamp to the payload of messages whose **final topic segment is `s`** (e.g. `test/s` → payload `hello` becomes `hello:1749470400000`). Topics merely ending in the letter `s` (`sensors`, `status`) are not modified. It skips bus-injected (inline) messages so cross-node messages are stamped exactly once. See [hooks/timestamp/README.md](hooks/timestamp/README.md) for behaviour and a manual test procedure.
 
 ## Developing with Event Hooks
 Many hooks are available for interacting with the broker and client lifecycle. 
