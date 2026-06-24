@@ -70,6 +70,26 @@ cd cmd
 go build -o mqtt && ./mqtt
 ```
 
+The standalone binary opens each listener independently, so plaintext and TLS ports can run side by side. TLS ports (`-mqtts`, `-wss`) require `-tls-cert-file`/`-tls-key-file`:
+
+| Flag | Default | Listener |
+|------|---------|----------|
+| `-tcp` | `:1883` | plaintext MQTT (`mqtt://`); empty to disable |
+| `-mqtts` | _(off)_ | TLS MQTT (`mqtts://`); needs cert/key |
+| `-ws` | `:1882` | plaintext WebSocket (`ws://`); empty to disable |
+| `-wss` | _(off)_ | TLS WebSocket (`wss://`); needs cert/key |
+| `-info` | `:8080` | HTTP $SYS dashboard; empty to disable |
+| `-tls-cert-file` / `-tls-key-file` | _(none)_ | PEM cert and key shared by `-mqtts` and `-wss` |
+
+For example, plaintext MQTT for backend plus TLS MQTT and TLS WebSocket for public clients:
+
+```
+./mqtt -tcp :1883 -mqtts :1885 -wss :1886 \
+  -tls-cert-file fullchain.pem -tls-key-file privkey.pem
+```
+
+(File-based configuration offers the same per-listener TLS via `tls_cert_file`/`tls_key_file` — see [File Based Configuration](#file-based-configuration).)
+
 ### Using Docker
 You can now pull and run the [official Mochi MQTT image](https://hub.docker.com/r/mochimqtt/server) from our Docker repo:
 

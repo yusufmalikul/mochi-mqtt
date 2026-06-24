@@ -22,11 +22,13 @@ import (
 )
 
 func main() {
-	tcpAddr := flag.String("tcp", ":1883", "network address for TCP listener")
-	wsAddr := flag.String("ws", ":1882", "network address for Websocket listener")
-	infoAddr := flag.String("info", ":8080", "network address for web info dashboard listener")
-	tlsCertFile := flag.String("tls-cert-file", "", "TLS certificate file")
-	tlsKeyFile := flag.String("tls-key-file", "", "TLS key file")
+	tcpAddr := flag.String("tcp", ":1883", "address for the plaintext MQTT (TCP) listener; empty to disable")
+	mqttsAddr := flag.String("mqtts", "", "address for the TLS MQTT (mqtts) listener; requires -tls-cert-file/-tls-key-file; empty to disable")
+	wsAddr := flag.String("ws", ":1882", "address for the plaintext WebSocket (ws) listener; empty to disable")
+	wssAddr := flag.String("wss", "", "address for the TLS WebSocket (wss) listener; requires -tls-cert-file/-tls-key-file; empty to disable")
+	infoAddr := flag.String("info", ":8080", "network address for web info dashboard listener; empty to disable")
+	tlsCertFile := flag.String("tls-cert-file", "", "TLS certificate file (used by -mqtts and -wss)")
+	tlsKeyFile := flag.String("tls-key-file", "", "TLS key file (used by -mqtts and -wss)")
 	brokerID := flag.String("broker-id", "", "unique broker ID; enables the Redis Streams bus for multi-instance clustering when set")
 	redisAddr := flag.String("redis", "localhost:6379", "Redis address for the cluster bus")
 	flag.Parse()
@@ -39,16 +41,22 @@ func main() {
 		done <- true
 	}()
 
+	// Load the TLS certificate once; it is shared by the mqtts and wss
+	// listeners. TLS is applied per-listener, so plaintext and TLS ports can
+	// run side by side (e.g. plain mqtt:// for backend, wss:// for mobile).
 	var tlsConfig *tls.Config
-
-	if tlsCertFile != nil && tlsKeyFile != nil && *tlsCertFile != "" && *tlsKeyFile != "" {
+	if *tlsCertFile != "" || *tlsKeyFile != "" {
+		if *tlsCertFile == "" || *tlsKeyFile == "" {
+			log.Fatal("both -tls-cert-file and -tls-key-file are required for TLS")
+		}
 		cert, err := tls.LoadX509KeyPair(*tlsCertFile, *tlsKeyFile)
 		if err != nil {
-			return
+			log.Fatalf("loading TLS keypair: %v", err)
 		}
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
+	if (*mqttsAddr != "" || *wssAddr != "") && tlsConfig == nil {
+		log.Fatal("-mqtts/-wss require -tls-cert-file and -tls-key-file")
 	}
 
 	// InlineClient must be enabled for the bus hook's consumer goroutine to
@@ -57,48 +65,38 @@ func main() {
 	_ = server.AddHook(new(auth.AllowHook), nil)
 	_ = server.AddHook(new(timestamp.Hook), nil)
 
-	// The TCP listener is intentionally left plaintext (no TLSConfig) for
-	// trusted/internal backend clients. TLS from -tls-cert-file/-tls-key-file
-	// is applied to the WebSocket listener only (see below), so public mobile
-	// clients can connect over wss:// while the backend uses plain mqtt://.
-	tcp := listeners.NewTCP(listeners.Config{
-		ID:      "t1",
-		Address: *tcpAddr,
-	})
-	err := server.AddListener(tcp)
-	if err != nil {
-		log.Fatal(err)
+	add := func(l listeners.Listener) {
+		if err := server.AddListener(l); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	ws := listeners.NewWebsocket(listeners.Config{
-		ID:        "ws1",
-		Address:   *wsAddr,
-		TLSConfig: tlsConfig,
-	})
-	err = server.AddListener(ws)
-	if err != nil {
-		log.Fatal(err)
+	// Plaintext MQTT (mqtt://) for trusted/internal clients.
+	if *tcpAddr != "" {
+		add(listeners.NewTCP(listeners.Config{ID: "tcp", Address: *tcpAddr}))
 	}
-
-	stats := listeners.NewHTTPStats(
-		listeners.Config{
-			ID:      "info",
-			Address: *infoAddr,
-		},
-		server.Info,
-	)
-	err = server.AddListener(stats)
-	if err != nil {
-		log.Fatal(err)
+	// TLS MQTT (mqtts://).
+	if *mqttsAddr != "" {
+		add(listeners.NewTCP(listeners.Config{ID: "mqtts", Address: *mqttsAddr, TLSConfig: tlsConfig}))
+	}
+	// Plaintext WebSocket (ws://).
+	if *wsAddr != "" {
+		add(listeners.NewWebsocket(listeners.Config{ID: "ws", Address: *wsAddr}))
+	}
+	// TLS WebSocket (wss://) for public/mobile clients.
+	if *wssAddr != "" {
+		add(listeners.NewWebsocket(listeners.Config{ID: "wss", Address: *wssAddr, TLSConfig: tlsConfig}))
+	}
+	if *infoAddr != "" {
+		add(listeners.NewHTTPStats(listeners.Config{ID: "info", Address: *infoAddr}, server.Info))
 	}
 
 	if *brokerID != "" {
-		err = server.AddHook(new(bus.Hook), &bus.Options{
+		if err := server.AddHook(new(bus.Hook), &bus.Options{
 			RedisOptions: &redis.Options{Addr: *redisAddr},
 			Server:       server,
 			BrokerID:     *brokerID,
-		})
-		if err != nil {
+		}); err != nil {
 			log.Fatal(err)
 		}
 	}
