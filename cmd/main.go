@@ -57,10 +57,13 @@ func main() {
 	_ = server.AddHook(new(auth.AllowHook), nil)
 	_ = server.AddHook(new(timestamp.Hook), nil)
 
+	// The TCP listener is intentionally left plaintext (no TLSConfig) for
+	// trusted/internal backend clients. TLS from -tls-cert-file/-tls-key-file
+	// is applied to the WebSocket listener only (see below), so public mobile
+	// clients can connect over wss:// while the backend uses plain mqtt://.
 	tcp := listeners.NewTCP(listeners.Config{
-		ID:        "t1",
-		Address:   *tcpAddr,
-		TLSConfig: tlsConfig,
+		ID:      "t1",
+		Address: *tcpAddr,
 	})
 	err := server.AddListener(tcp)
 	if err != nil {
@@ -68,8 +71,9 @@ func main() {
 	}
 
 	ws := listeners.NewWebsocket(listeners.Config{
-		ID:      "ws1",
-		Address: *wsAddr,
+		ID:        "ws1",
+		Address:   *wsAddr,
+		TLSConfig: tlsConfig,
 	})
 	err = server.AddListener(ws)
 	if err != nil {
