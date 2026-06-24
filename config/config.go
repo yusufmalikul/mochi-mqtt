@@ -5,7 +5,9 @@
 package config
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -175,8 +177,32 @@ func FromBytes(b []byte) (*mqtt.Options, error) {
 
 	o = c.Options
 	o.Hooks = c.HookConfigs.ToHooks()
-	o.Listeners = c.Listeners
+	listenerConfigs, err := loadListenerTLS(c.Listeners)
+	if err != nil {
+		return nil, err
+	}
+	o.Listeners = listenerConfigs
 	o.Logger = c.LoggingConfig.ToLogger()
 
 	return &o, nil
+}
+
+// loadListenerTLS loads the cert/key files configured on each listener into a
+// tls.Config so the listener can serve TLS (e.g. wss://). Listeners without
+// both tls_cert_file and tls_key_file are left as plaintext.
+func loadListenerTLS(in []listeners.Config) ([]listeners.Config, error) {
+	for i := range in {
+		if in[i].TLSCertFile == "" && in[i].TLSKeyFile == "" {
+			continue
+		}
+		if in[i].TLSCertFile == "" || in[i].TLSKeyFile == "" {
+			return nil, fmt.Errorf("listener %q: both tls_cert_file and tls_key_file must be set", in[i].ID)
+		}
+		cert, err := tls.LoadX509KeyPair(in[i].TLSCertFile, in[i].TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("listener %q: loading TLS keypair: %w", in[i].ID, err)
+		}
+		in[i].TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
+	return in, nil
 }

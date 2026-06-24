@@ -3,3 +3,6 @@ cmd/mqtt
 *.db
 .idea
 vendor
+# local build artifacts and test certs
+/mochi
+*.pem

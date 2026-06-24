@@ -113,6 +113,23 @@ options:
 
 Please review the examples found in [examples/config](examples/config) for all available configuration options.
 
+#### TLS listeners in file-based configuration
+A listener can serve TLS by setting `tls_cert_file` and `tls_key_file` (paths to a PEM certificate and matching key) in its config entry. This lets a websocket listener serve `wss://` (e.g. for browser/mobile clients) while a separate TCP listener stays plaintext for trusted backend clients:
+
+```yaml
+listeners:
+  - type: "tcp"            # backend clients, plaintext mqtt://
+    id: "backend-tcp"
+    address: ":1993"
+  - type: "ws"             # mobile/web clients, wss://
+    id: "mobile-wss"
+    address: ":1992"
+    tls_cert_file: "/etc/mochi/certs/cert.pem"
+    tls_key_file: "/etc/mochi/certs/key.pem"
+```
+
+Both files must be provided together. See [examples/config/config.deploy.yaml](examples/config/config.deploy.yaml) and the example [docker-compose.yml](docker-compose.yml) for a full deployment.
+
 There are a few conditions to note:
 1. If you use file-based configuration, the supported hook types for configuration are currently limited to auth, storage, and debug. Each type of hook can only have one instance.
 2. You can only use built in hooks with file-based configuration, as the type and configuration structure needs to be known by the server in order for it to be applied.

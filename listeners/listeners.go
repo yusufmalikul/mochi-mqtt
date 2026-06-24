@@ -14,11 +14,16 @@ import (
 
 // Config contains configuration values for a listener.
 type Config struct {
-	Type    string
-	ID      string
-	Address string
+	Type    string `yaml:"type" json:"type"`
+	ID      string `yaml:"id" json:"id"`
+	Address string `yaml:"address" json:"address"`
 	// TLSConfig is a tls.Config configuration to be used with the listener. See examples folder for basic and mutual-tls use.
-	TLSConfig *tls.Config
+	TLSConfig *tls.Config `yaml:"-" json:"-"`
+	// TLSCertFile and TLSKeyFile are paths to a PEM certificate and key. When
+	// both are set in file-based configuration, they are loaded into TLSConfig
+	// so the listener serves TLS (e.g. wss:// for a websocket listener).
+	TLSCertFile string `yaml:"tls_cert_file" json:"tls_cert_file"`
+	TLSKeyFile  string `yaml:"tls_key_file" json:"tls_key_file"`
 }
 
 // EstablishFn is a callback function for establishing new clients.

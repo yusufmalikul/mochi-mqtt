@@ -1,0 +1,25 @@
+# Example Docker Compose deployment.
+#
+# Builds the image from this repo and runs it with file-based configuration.
+# The ./deploy directory is bind-mounted to /etc/mochi and must contain:
+#   - config.yaml      (see examples/config/config.deploy.yaml for a template)
+#   - certs/cert.pem   (TLS certificate, for wss:// on the websocket listener)
+#   - certs/key.pem    (matching private key)
+#
+# In production use a real CA-signed certificate for your domain so mobile /
+# browser clients do not need to disable certificate verification.
+#
+# Note: mount the directory (not individual files); some VM-backed Docker
+# setups (e.g. Colima/virtiofs) mishandle single-file bind mounts.
+services:
+  mochi-mqtt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["--config", "/etc/mochi/config.yaml"]
+    restart: unless-stopped
+    ports:
+      - "1993:1993"   # backend clients: plaintext TCP MQTT
+      - "1992:1992"   # mobile/web clients: MQTT over WebSocket (wss)
+    volumes:
+      - ./deploy:/etc/mochi:ro

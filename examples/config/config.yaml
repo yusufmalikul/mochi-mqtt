@@ -5,6 +5,10 @@ listeners:
   - type: "ws"
     id: "file-websocket"
     address: ":1882"
+    # Set both to serve TLS (wss://) on this listener, e.g. for browser/mobile
+    # clients. Omit them to keep the listener plaintext (ws://).
+    # tls_cert_file: "/etc/mochi/certs/cert.pem"
+    # tls_key_file: "/etc/mochi/certs/key.pem"
   - type: "healthcheck"
     id: "file-healthcheck"
     address: ":1880"

@@ -1,0 +1,26 @@
+# Deployment config: plaintext TCP for backend clients, wss:// for mobile.
+#
+# Used by the example docker-compose.yml. Place this (renamed to config.yaml)
+# plus a certs/ directory into ./deploy.
+listeners:
+  # Backend / internal clients connect here over plain TCP (mqtt://host:1993).
+  - type: "tcp"
+    id: "backend-tcp"
+    address: ":1993"
+
+  # Mobile / browser clients connect here over TLS WebSocket
+  # (wss://host:1992/mqtt). Remove the tls_* lines to make it plaintext ws://.
+  - type: "ws"
+    id: "mobile-wss"
+    address: ":1992"
+    tls_cert_file: "/etc/mochi/certs/cert.pem"
+    tls_key_file: "/etc/mochi/certs/key.pem"
+
+hooks:
+  # Replace with a real auth ledger before exposing to untrusted networks.
+  auth:
+    allow_all: true
+
+options:
+  # Required if you enable the clustering bus; harmless otherwise.
+  inline_client: true
