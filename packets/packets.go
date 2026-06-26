@@ -467,9 +467,13 @@ func (pk *Packet) ConnectValidate() Code {
 		return ErrProtocolViolationUsernameNoFlag // [MQTT-3.1.2-16]
 	}
 
-	if pk.Connect.PasswordFlag && len(pk.Connect.Password) == 0 {
-		return ErrProtocolViolationFlagNoPassword // [MQTT-3.1.2-19]
-	}
+	// Note: the MQTT spec [MQTT-3.1.2-19] says a set password flag must carry a
+	// non-empty password. We relax this to match EMQX, which accepts an empty
+	// password when the flag is set. Some Qiscus mobile/web clients send the
+	// password flag with an empty value; rejecting them here would break them.
+	// if pk.Connect.PasswordFlag && len(pk.Connect.Password) == 0 {
+	// 	return ErrProtocolViolationFlagNoPassword // [MQTT-3.1.2-19]
+	// }
 
 	if !pk.Connect.PasswordFlag && len(pk.Connect.Password) > 0 {
 		return ErrProtocolViolationPasswordNoFlag // [MQTT-3.1.2-18]

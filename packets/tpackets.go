@@ -856,10 +856,12 @@ var TPacketData = map[byte]TPacketCases{
 			},
 		},
 		{
-			Case:   TConnectInvalidFlagNoPassword,
-			Desc:   "has password flag but no password",
+			Case: TConnectInvalidFlagNoPassword,
+			// Relaxed to match EMQX: a set password flag with an empty password
+			// is accepted, not a violation. See ConnectValidate in packets.go.
+			Desc:   "has password flag but no password (allowed, EMQX-compatible)",
 			Group:  "validate",
-			Expect: ErrProtocolViolationFlagNoPassword,
+			Expect: nil,
 			Packet: &Packet{
 				FixedHeader:     FixedHeader{Type: Connect},
 				ProtocolVersion: 4,
