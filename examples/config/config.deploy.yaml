@@ -16,10 +16,13 @@ listeners:
     tls_cert_file: "/etc/mochi/certs/cert.pem"
     tls_key_file: "/etc/mochi/certs/key.pem"
 
-hooks:
-  # Replace with a real auth ledger before exposing to untrusted networks.
-  auth:
-    allow_all: true
+# IMPORTANT: do NOT configure any auth hook here (neither `allow_all: true`
+# nor an `auth.ledger`). Mochi combines ACL hooks with OR: a subscribe is
+# allowed if ANY hook allows it. cmd/docker always registers the
+# no-wildcard-sub hook, but any other ACL hook that allows "#" (allow_all, or a
+# ledger with a broad filter like "app/#") overrides it and lets wildcards
+# through. The no-wildcard-sub hook already permits all connections, so leaving
+# the hooks section empty gives open connect + wildcard-blocked subscribe.
 
 options:
   # Required if you enable the clustering bus; harmless otherwise.
