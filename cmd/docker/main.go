@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"github.com/mochi-mqtt/server/v2/config"
+	"github.com/mochi-mqtt/server/v2/hooks/nowildcardsub"
 	"log"
 	"log/slog"
 	"os"
@@ -41,6 +42,14 @@ func main() {
 	}
 
 	server := mqtt.New(options)
+
+	// Block wildcard subscriptions: a client may only subscribe to a fully
+	// specified topic (must know the exact name, e.g. the email), never with
+	// "+"/"#". This runs alongside any auth hook from config; a subscribe must
+	// pass both, so wildcards are refused regardless of the config ACL.
+	if err := server.AddHook(new(nowildcardsub.Hook), nil); err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		err := server.Serve()
