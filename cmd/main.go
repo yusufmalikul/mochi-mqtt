@@ -15,6 +15,7 @@ import (
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
 	"github.com/mochi-mqtt/server/v2/hooks/bus"
+	"github.com/mochi-mqtt/server/v2/hooks/nowildcardsub"
 	"github.com/mochi-mqtt/server/v2/hooks/timestamp"
 	"github.com/mochi-mqtt/server/v2/listeners"
 
@@ -31,6 +32,7 @@ func main() {
 	tlsKeyFile := flag.String("tls-key-file", "", "TLS key file (used by -mqtts and -wss)")
 	brokerID := flag.String("broker-id", "", "unique broker ID; enables the Redis Streams bus for multi-instance clustering when set")
 	redisAddr := flag.String("redis", "localhost:6379", "Redis address for the cluster bus")
+	blockWildcardSub := flag.Bool("block-wildcard-sub", true, "block subscriptions that use + or # wildcards; clients must subscribe to a fully specified topic")
 	flag.Parse()
 
 	sigs := make(chan os.Signal, 1)
@@ -62,7 +64,16 @@ func main() {
 	// InlineClient must be enabled for the bus hook's consumer goroutine to
 	// re-inject remote messages via server.Publish.
 	server := mqtt.New(&mqtt.Options{InlineClient: *brokerID != ""})
-	_ = server.AddHook(new(auth.AllowHook), nil)
+	// An auth hook must be registered or the server denies every connection
+	// ("Bad User Name or Password"). With -block-wildcard-sub (default) the
+	// nowildcardsub hook allows connections but blocks "+"/"#" subscribes;
+	// clients must subscribe to a fully specified topic (e.g. the exact email).
+	// Set -block-wildcard-sub=false to allow all subscribes (AllowHook).
+	if *blockWildcardSub {
+		_ = server.AddHook(new(nowildcardsub.Hook), nil)
+	} else {
+		_ = server.AddHook(new(auth.AllowHook), nil)
+	}
 	_ = server.AddHook(new(timestamp.Hook), nil)
 
 	add := func(l listeners.Listener) {
