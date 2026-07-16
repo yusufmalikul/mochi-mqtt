@@ -6,3 +6,5 @@ vendor
 # local build artifacts and test certs
 /mochi
 *.pem
+# local deploy dir: holds real configs, certs and credentials
+/deploy/

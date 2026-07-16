@@ -43,6 +43,11 @@ hooks:
     broker_id: ""              # empty = auto (hostname); set only for a fixed id
     # redis_password: ""       # set if your Redis needs auth
     # redis_db: 0              # Redis DB number
+    # redis_tls: true          # required for Redis with in-transit encryption
+    #                          # (e.g. AWS ElastiCache/Valkey with TLS); without
+    #                          # it the broker fails with "connection reset by peer"
+    # redis_tls_insecure: true # skip cert verification (self-signed test certs
+    #                          # only — NEVER in production)
     # stream: "mochi:bus"      # defaults to mochi:bus
     # max_len: 10000           # approx stream cap; the bus is a conveyor, not an archive
 

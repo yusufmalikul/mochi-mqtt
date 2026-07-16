@@ -79,6 +79,18 @@ type BusConfig struct {
 	// config file. Set it explicitly only when you want a fixed, human-readable
 	// id (e.g. "broker-a").
 	BrokerID string `yaml:"broker_id" json:"broker_id"`
+	// RedisTLS enables TLS (an encrypted connection) to the bus Redis. Required
+	// for e.g. AWS ElastiCache/Valkey with in-transit encryption, whose TLS-only
+	// endpoint otherwise drops the plaintext handshake with a misleading
+	// "connection reset by peer". The server certificate is verified against the
+	// system CA store; ElastiCache certs are signed by a public Amazon CA, so no
+	// extra CA setup is needed there.
+	RedisTLS bool `yaml:"redis_tls" json:"redis_tls"`
+	// RedisTLSInsecure skips server certificate verification (for self-signed
+	// certs in local test setups). Only meaningful when RedisTLS is true. Never
+	// enable it in production: it removes the protection against connecting to
+	// an impostor Redis.
+	RedisTLSInsecure bool `yaml:"redis_tls_insecure" json:"redis_tls_insecure"`
 	// Stream is the Redis Stream key used as the bus. Optional; the hook
 	// defaults it to "mochi:bus" when empty.
 	Stream string `yaml:"stream" json:"stream"`
@@ -94,13 +106,22 @@ type BusConfig struct {
 // When BrokerID is empty a unique id is generated (see resolveBrokerID), so an
 // autoscaled fleet can run from one shared config file.
 func (bc *BusConfig) ToHook(server *mqtt.Server) mqtt.HookLoadConfig {
+	var tlsConfig *tls.Config
+	if bc.RedisTLS {
+		tlsConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: bc.RedisTLSInsecure,
+		}
+	}
+
 	return mqtt.HookLoadConfig{
 		Hook: new(bus.Hook),
 		Config: &bus.Options{
 			RedisOptions: &redis.Options{
-				Addr:     bc.RedisAddr,
-				Password: bc.RedisPassword,
-				DB:       bc.RedisDB,
+				Addr:      bc.RedisAddr,
+				Password:  bc.RedisPassword,
+				DB:        bc.RedisDB,
+				TLSConfig: tlsConfig,
 			},
 			Server:   server,
 			BrokerID: resolveBrokerID(bc.BrokerID),
