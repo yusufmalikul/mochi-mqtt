@@ -1,8 +1,18 @@
-# Example Docker Compose deployment.
+# Example Docker Compose deployment with the Redis clustering bus.
 #
-# Builds the image from this repo and runs it with file-based configuration.
+# The broker service is horizontally scalable: every replica shares the SAME
+# config file and the SAME Redis, and each derives a unique bus id from its
+# container hostname automatically (config broker_id left empty). So you can:
+#
+#   docker compose up -d --scale mochi-mqtt=3
+#
+# and all three instances share published messages over Redis Streams — a
+# subscriber on any instance receives messages published to any other. Put a
+# load balancer in front of the broker port in production (individual replica
+# host ports are not published here, since scaled replicas cannot share one).
+#
 # The ./deploy directory is bind-mounted to /etc/mochi and must contain:
-#   - config.yaml      (see examples/config/config.deploy.yaml for a template)
+#   - config.yaml      (see examples/config/config.deploy.yaml; broker_id empty)
 #   - certs/cert.pem   (TLS certificate, for wss:// on the websocket listener)
 #   - certs/key.pem    (matching private key)
 #
@@ -12,14 +22,26 @@
 # Note: mount the directory (not individual files); some VM-backed Docker
 # setups (e.g. Colima/virtiofs) mishandle single-file bind mounts.
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Only the brokers talk to Redis over the compose network; no host port.
+    # Add a volume if you want the bus stream to survive a redis restart; for a
+    # pure in-flight conveyor it is fine to keep it in memory.
+
   mochi-mqtt:
     build:
       context: .
       dockerfile: Dockerfile
     command: ["--config", "/etc/mochi/config.yaml"]
     restart: unless-stopped
-    ports:
-      - "1993:1993"   # backend clients: plaintext TCP MQTT
-      - "1992:1992"   # mobile/web clients: MQTT over WebSocket (wss)
+    depends_on:
+      - redis
+    # No `ports:` here: with --scale > 1, replicas cannot all bind the same host
+    # port. Front them with a load balancer, or run a single instance and
+    # uncomment the ports below for local testing:
+    # ports:
+    #   - "1993:1993"   # backend clients: plaintext TCP MQTT
+    #   - "1992:1992"   # mobile/web clients: MQTT over WebSocket (wss)
     volumes:
       - ./deploy:/etc/mochi:ro

@@ -16,14 +16,37 @@ listeners:
     tls_cert_file: "/etc/mochi/certs/cert.pem"
     tls_key_file: "/etc/mochi/certs/key.pem"
 
-# IMPORTANT: do NOT configure any auth hook here (neither `allow_all: true`
-# nor an `auth.ledger`). Mochi combines ACL hooks with OR: a subscribe is
-# allowed if ANY hook allows it. cmd/docker always registers the
-# no-wildcard-sub hook, but any other ACL hook that allows "#" (allow_all, or a
-# ledger with a broad filter like "app/#") overrides it and lets wildcards
-# through. The no-wildcard-sub hook already permits all connections, so leaving
-# the hooks section empty gives open connect + wildcard-blocked subscribe.
+# IMPORTANT: do NOT configure any auth hook under `hooks:` (neither
+# `hooks.auth.allow_all: true` nor a `hooks.auth.ledger`). Mochi combines ACL
+# hooks with OR: a subscribe is allowed if ANY hook allows it. cmd/docker always
+# registers the no-wildcard-sub hook, but any other ACL hook that allows "#"
+# (allow_all, or a ledger with a broad filter like "app/#") overrides it and
+# lets wildcards through. The no-wildcard-sub hook already permits all
+# connections, so leaving out any auth hook gives open connect + wildcard-blocked
+# subscribe. (The `bus:` hook below is safe: it only routes published messages
+# between brokers and does NOT grant any subscribe permission.)
+
+# Clustering bus: share published messages between multiple broker instances
+# over Redis Streams. Each broker keeps its subscription table in local RAM, so
+# without this a subscriber on broker A never sees a message published to broker
+# B. Enable this block on EVERY broker and point them all at the SAME Redis.
+#
+# broker_id must be unique per instance. LEAVE IT EMPTY for autoscaling: the
+# broker then derives its own id from the container/pod hostname (unique per
+# replica in Docker and Kubernetes), falling back to a random id. That means
+# every replica can share THIS one config file and still get a distinct id — no
+# per-instance file, no env wiring. Set broker_id explicitly only if you want a
+# fixed, human-readable name for a small fixed set of brokers.
+hooks:
+  bus:
+    redis_addr: "redis:6379"   # Redis service address (host:port).
+    broker_id: ""              # empty = auto (hostname); set only for a fixed id
+    # redis_password: ""       # set if your Redis needs auth
+    # redis_db: 0              # Redis DB number
+    # stream: "mochi:bus"      # defaults to mochi:bus
+    # max_len: 10000           # approx stream cap; the bus is a conveyor, not an archive
 
 options:
-  # Required if you enable the clustering bus; harmless otherwise.
+  # Required by the clustering bus; harmless otherwise. When a `bus:` block is
+  # present this is forced on automatically, but leaving it here is fine.
   inline_client: true
