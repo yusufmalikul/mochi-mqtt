@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	Version                       = "2.8.8" // the current server version.
+	Version                       = "2.8.9" // the current server version.
 	defaultSysTopicInterval int64 = 1       // the interval between $SYS topic publishes
 	LocalListener                 = "local"
 	InlineClientId                = "inline"

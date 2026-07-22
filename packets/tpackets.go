@@ -70,6 +70,7 @@ const (
 	TConnectInvalidWillFlagQosOutOfRange
 	TConnectInvalidWillSurplusRetain
 	TConnectZeroByteUsername
+	TConnectZeroByteWillPayload
 	TConnectSpecInvalidUTF8D800
 	TConnectSpecInvalidUTF8DFFF
 	TConnectSpecInvalidUTF80000
@@ -534,6 +535,42 @@ var TPacketData = map[byte]TPacketCases{
 				Properties: Properties{
 					SessionExpiryInterval:     uint32(120),
 					SessionExpiryIntervalFlag: true,
+				},
+			},
+		},
+
+		{
+			Case:  TConnectZeroByteWillPayload,
+			Desc:  "will flag with will topic but 0 byte will payload",
+			Group: "decode",
+			RawBytes: []byte{
+				Connect << 4, 25, // Fixed header
+				0, 4, // Protocol Name - MSB+LSB
+				'M', 'Q', 'T', 'T', // Protocol Name
+				4,     // Protocol Version
+				38,    // Packet Flags - will retain, will flag, clean
+				0, 30, // Keepalive
+				0, 3, // Client ID - MSB+LSB
+				'z', 'e', 'n', // Client ID "zen"
+				0, 6, // Will Topic - MSB+LSB
+				'u', '/', 'u', '1', '/', 's', // Will Topic "u/u1/s"
+				0, 0, // Will Payload - MSB+LSB (zero length, but present)
+			},
+			Packet: &Packet{
+				FixedHeader: FixedHeader{
+					Type:      Connect,
+					Remaining: 25,
+				},
+				ProtocolVersion: 4,
+				Connect: ConnectParams{
+					ProtocolName:     []byte("MQTT"),
+					Clean:            true,
+					Keepalive:        30,
+					ClientIdentifier: "zen",
+					WillFlag:         true,
+					WillTopic:        "u/u1/s",
+					WillPayload:      []byte{},
+					WillRetain:       true,
 				},
 			},
 		},

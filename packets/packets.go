@@ -484,7 +484,13 @@ func (pk *Packet) ConnectValidate() Code {
 	}
 
 	if pk.Connect.WillFlag {
-		if len(pk.Connect.WillPayload) == 0 || pk.Connect.WillTopic == "" {
+		// [MQTT-3.1.2-9] requires the will topic and will message to be *present*
+		// when the will flag is set, not to be non-empty. The will message is
+		// length-prefixed binary data, so a zero length payload is present and
+		// valid, and some clients rely on it (e.g. the Qiscus web SDK, whose LWT
+		// payload of 0 encodes as a zero-length will payload). Only an empty will
+		// topic is a violation, since a zero-length topic name is never valid.
+		if pk.Connect.WillTopic == "" {
 			return ErrProtocolViolationWillFlagNoPayload // [MQTT-3.1.2-9]
 		}
 

@@ -1013,6 +1013,36 @@ func TestServerEstablishConnectionZeroByteUsernameIsValid(t *testing.T) {
 	_ = r.Close()
 }
 
+// A Will Message is length-prefixed binary data, so a zero-length payload is
+// present and valid - [MQTT-3.1.2-9] requires the will fields to be present,
+// not to be non-empty. Rejecting it breaks clients which set a will with an
+// empty body, e.g. the Qiscus web SDK, whose LWT is {topic: u/<id>/s,
+// payload: 0} and therefore encodes a zero-length will payload.
+func TestServerEstablishConnectionEmptyWillPayloadIsValid(t *testing.T) {
+	s := newServer()
+
+	r, w := net.Pipe()
+	o := make(chan error)
+	go func() {
+		o <- s.EstablishConnection("tcp", r)
+	}()
+
+	go func() {
+		_, _ = w.Write(packets.TPacketData[packets.Connect].Get(packets.TConnectZeroByteWillPayload).RawBytes)
+		_, _ = w.Write(packets.TPacketData[packets.Disconnect].Get(packets.TDisconnect).RawBytes)
+	}()
+
+	go func() {
+		_, err := io.ReadAll(w)
+		require.NoError(t, err)
+	}()
+
+	err := <-o
+	require.NoError(t, err)
+
+	_ = r.Close()
+}
+
 func TestServerEstablishConnectionInvalidConnectAckFailure(t *testing.T) {
 	s := newServer()
 
